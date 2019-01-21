@@ -1,0 +1,162 @@
+<html><head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+    <title>swoole聊天室</title>
+    <style>
+        .container{
+            width:50%;
+            height: 500px;
+            margin:0 auto;
+        }
+        .content{
+            width: 500px;
+            height: 450px;
+            border: 1px solid black;
+            overflow:auto;
+        }
+        .msgAll{
+            width:50%;
+            margin:0 auto;
+        }
+        .content div{
+            border-bottom:1px solid #999999;
+        }
+        .content p{
+            height:8px;
+        }
+        .content span{
+            font-size:12px;
+        }
+    </style>
+    <script type="text/javascript" src="__STATIC__/chat/js/jquery.min.js"></script>
+</head>
+<body onload="connect();">
+<div class="container">
+    <!--<textarea name="msg" id="" cols="80" rows="30" style="resize:none"></textarea>-->
+    <div class="content">
+
+    </div>
+</div>
+<div class="msgAll">
+    <span></span><br>
+    <select name="" class="sendTo">
+        <option value="0">全部</option>
+    </select>
+    <input type="text" class="msg" name="msg" value="" style="width: 350px;">
+    <input type="button" value="发送" class="send">
+</div>
+<a href="http://www.baidu.com">百度一下</a>
+</body>
+<script>
+    var name = '';
+    var fd = 0;
+    var userId = (new Date()).valueOf();
+    if(!name)
+    {
+        show_prompt(); //输入用户名
+    }
+    // 连接服务端
+    function connect() {
+        // 创建websocket
+        ws = new WebSocket("ws://39.105.129.105:9508?userInfo="+userId+"_"+name);
+        // 当socket连接打开时，输入用户名,并建立连接
+        ws.onopen = onopen;
+        // 当有消息时根据消息类型显示不同信息
+        ws.onmessage = onmessage;
+        ws.onclose = function() {
+            console.log("连接关闭，定时重连");
+//            connect();
+        };
+        ws.onerror = function() {
+            console.log("出现错误");
+        };
+    }
+
+    // 连接建立时发送登录信息
+    function onopen()
+    {
+        if(!name)
+        {
+            show_prompt(); //输入用户名
+        }
+        // 登录
+        var login_data = '{"type":"login","client_id":"'+userId+'","client_name":"'+name.replace(/"/g, '\\"')+'"}';
+        console.log(fd);
+        console.log("websocket握手成功，发送登录数据:"+login_data);
+        ws.send(login_data);
+    }
+    
+    //发送消息
+    $('.send').click(function () {
+        var msg = $('.msg').val();
+        if(!msg){
+            return;
+        }
+        var toFd = $('.sendTo').val();
+        if(toFd == 0){
+            data = '{"type":"all","client_name":"'+name+'","msg":"'+msg+'"}';
+        }else{
+            var to_name = $('.sendTo').find('option:selected').text();
+            data = '{"type":"say","fd":"'+fd+'","client_name":"'+name+'","to_fd":"'+toFd+'","to_client_name":"'+to_name+'","msg":"'+msg+'"}';
+            $('.content').append("<div><p>您对 "+to_name+" 说：</p><span>"+msg+"</span></div>");
+        }
+        ws.send(data);
+        $('.msg').val('');
+    });
+
+    //接收到消息
+    function onmessage(evt) {
+        var data = evt.data;
+        data = JSON.parse(data);
+//        console.log(data);
+        if(data.type == 'welcome'){
+            fd = data.fd;
+        }else if(data.type == 'login'){
+            if(data.fd != fd){
+                $('.sendTo').append('<option value="'+data.fd+'">'+data.userName+'</option>');
+            }
+            $('.content').append("<div><p>系统消息：</p><span>"+data.msg+"</span></div>");
+        }else if(data.type == 'userList'){
+            var len = data.currUser.length;
+            var userList = data.currUser;
+            var str = '';
+            for(var i=0; i<len; i++){
+                str += '<option value="'+userList[i].fd+'">'+userList[i].userName+'</option>';
+            }
+            $('.sendTo').append($(str));
+//            console.log(data.currUser);
+        }else if(data.type == 'all'){
+            if(name == data.userName){
+                var title = '你对大家说：';
+            }else{
+                var title = data.userName+" 对大家说：";
+            }
+            $('.content').append("<div><p>"+title+"</p><span>"+data.msg+"</span></div>");
+        }else if(data.type == 'say'){
+            $('.content').append("<div><p>"+data.fromUserName+" 对您说：</p><span>"+data.msg+"</span></div>");
+        }else if(data.type == 'close'){
+            $('.sendTo').find('option[value="'+data.fd+'"]').remove();
+            $('.content').append("<div><p>系统消息：</p><span>"+data.msg+"</span></div>");
+        }
+    }
+
+    // 输入姓名
+    function show_prompt(){
+        name = prompt('输入你的名字：', '');
+        if(!name || name=='null'){
+            name = 'Guest'+ randomNum(6);
+        }
+        $('.msgAll').find('span').text('用户名：'+ name);
+    }
+
+    //生成指定位数的随机整数
+    function randomNum(n){
+        n = 5;
+        var t='';
+        for(var i=0;i<n;i++){
+            t+=Math.floor(Math.random()*10);
+        }
+        return t;
+    }
+
+</script>
+</html>
